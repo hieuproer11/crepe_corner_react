@@ -1,10 +1,26 @@
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 
 // Modifie cette URL selon ton environnement.
 // - Émulateur Android : http://10.0.2.2:8000/api
 // - Simulateur iOS    : http://127.0.0.1:8000/api
 // - Téléphone réel    : http://<IP_DE_TON_PC>:8000/api  (sur le même Wi-Fi)
-const DEFAULT_API_URL = 'http://10.0.2.2:8000/api';
+function getExpoHost(): string | undefined {
+  const hostUri =
+    Constants.expoConfig?.hostUri ??
+    (Constants as { manifest?: { debuggerHost?: string } }).manifest?.debuggerHost;
+  if (!hostUri) return undefined;
+  return hostUri.split(':')[0];
+}
+
+const DEFAULT_API_URL = (() => {
+  const expoHost = getExpoHost();
+  if (expoHost) {
+    // In Expo Go dev mode, reuse the same host as Metro and target backend port 8000.
+    return `http://${expoHost}:8000/api`;
+  }
+  return Platform.OS === 'android' ? 'http://10.0.2.2:8000/api' : 'http://127.0.0.1:8000/api';
+})();
 
 export const API_URL =
   (Constants.expoConfig?.extra?.apiUrl as string | undefined) ?? DEFAULT_API_URL;

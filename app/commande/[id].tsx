@@ -232,4 +232,6 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
   },
   btnSecondaryText: { color: colors.primaryDark, fontWeight: '700' },
+  errorTitle: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
+  errorMsg: { fontSize: 14, color: colors.textMuted },
 });
