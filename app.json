@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "Crepe Corner",
+    "slug": "crepe-corner-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "crepecorner",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#FFF7ED"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSCameraUsageDescription": "Cette application utilise la caméra pour scanner les QR codes des commandes."
+      }
+    },
+    "android": {
+      "permissions": ["android.permission.CAMERA"],
+      "adaptiveIcon": {
+        "backgroundColor": "#FFF7ED"
+      }
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Autoriser Crepe Corner à accéder à votre caméra pour scanner les QR codes."
+        }
+      ]
+    ],
+    "extra": {
+      "apiUrl": "http://10.0.2.2:8000/api"
+    }
+  }
+}
