@@ -138,6 +138,7 @@ export const STATUT_LABELS: Record<string, string> = {
   preparing: 'En préparation',
   ready: 'Prête',
   served: 'Servie',
+  cancelled: 'Annulée',
 };
 
 export const STATUT_PROGRESS: string[] = [
@@ -171,6 +172,13 @@ export const api = {
   /** GET /api/restaurants/{restaurantId}/orders/{orderId} */
   getOrder: (restaurantId: number, orderId: number) =>
     request<{ order: Order }>(`/restaurants/${restaurantId}/orders/${orderId}`),
+
+  /** PATCH /api/restaurants/{restaurantId}/orders/{orderId}/cancel */
+  cancelOrder: (restaurantId: number, orderId: number) =>
+    request<{ order: { id: number; status: string } }>(
+      `/restaurants/${restaurantId}/orders/${orderId}/cancel`,
+      { method: 'PATCH' },
+    ),
 
   /**
    * POST /api/application/commands

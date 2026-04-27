@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import {
@@ -25,9 +26,6 @@ export default function PanierScreen() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
 
-  // Geo-trigger threshold (km)
-  const [threshold, setThreshold] = useState('0.5');
-
   const ridToUse = restaurantId ?? RESTAURANT_ID;
 
   const cartPayload = items.map((i) => ({
@@ -49,42 +47,17 @@ export default function PanierScreen() {
     return true;
   };
 
-  /** Mode 1 — Immediate order */
+  /** Passer la commande */
   const passerCommande = async () => {
     if (!validate() || items.length === 0) return;
     setSubmitting(true);
     try {
       const res = await api.createOrder(ridToUse, customer, cartPayload);
+      await AsyncStorage.setItem('currentOrder', JSON.stringify({ orderId: res.order.id, restaurantId: ridToUse }));
       clear();
       router.replace(`/commande/${res.order.id}?restaurantId=${ridToUse}`);
     } catch (e: any) {
       Alert.alert('Erreur', e.message ?? 'Impossible de passer la commande.');
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  /** Mode 2 — Geo-triggered (Meal On the Road) */
-  const commanderEnRoute = async () => {
-    if (!validate() || items.length === 0) return;
-    const km = parseFloat(threshold);
-    if (isNaN(km) || km <= 0) {
-      Alert.alert('Seuil invalide', 'Entrez une distance en km valide (ex. 0.5).');
-      return;
-    }
-    setSubmitting(true);
-    try {
-      const vehicleId = `vehicle-${Date.now()}`;
-      await api.registerCommand({
-        vehicleId,
-        restaurantId: ridToUse,
-        thresholdKm: km,
-        orderPayload: { customer, items: cartPayload },
-      });
-      clear();
-      router.replace(`/trajet?vehicleId=${vehicleId}&restaurantId=${ridToUse}`);
-    } catch (e: any) {
-      Alert.alert('Erreur', e.message ?? 'Impossible d\'enregistrer la commande en route.');
     } finally {
       setSubmitting(false);
     }
@@ -179,44 +152,6 @@ export default function PanierScreen() {
             )}
           </Pressable>
 
-          {/* Divider */}
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>ou</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          {/* Geo-triggered order */}
-          <Text style={styles.sectionLabel}>Meal On the Road</Text>
-          <Text style={styles.geoDesc}>
-            Votre commande sera automatiquement déclenchée quand votre véhicule
-            arrivera à proximité du restaurant.
-          </Text>
-          <View style={styles.thresholdRow}>
-            <Text style={styles.thresholdLabel}>Déclencher à</Text>
-            <TextInput
-              style={[styles.input, styles.thresholdInput]}
-              value={threshold}
-              onChangeText={setThreshold}
-              keyboardType="decimal-pad"
-            />
-            <Text style={styles.thresholdLabel}>km du restaurant</Text>
-          </View>
-
-          <Pressable
-            style={({ pressed }) => [
-              styles.secondaryBtn,
-              (pressed || submitting) && { opacity: 0.7 },
-            ]}
-            disabled={submitting}
-            onPress={commanderEnRoute}
-          >
-            {submitting ? (
-              <ActivityIndicator color={colors.primaryDark} />
-            ) : (
-              <Text style={styles.secondaryBtnText}>Activer Meal On the Road</Text>
-            )}
-          </Pressable>
         </View>
       }
     />

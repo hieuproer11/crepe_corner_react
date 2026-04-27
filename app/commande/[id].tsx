@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   RefreshControl,
@@ -9,6 +10,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   api,
   formatPrixStr,
@@ -31,6 +33,7 @@ export default function CommandeScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cancelling, setCancelling] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -78,6 +81,34 @@ export default function CommandeScreen() {
   }
 
   const currentStep = STATUT_PROGRESS.indexOf(order.status);
+
+  const canCancel = !['ready', 'served', 'cancelled'].includes(order.status);
+
+  const handleCancel = () => {
+    Alert.alert(
+      'Annuler la commande',
+      'Êtes-vous sûr de vouloir annuler cette commande ?',
+      [
+        { text: 'Non', style: 'cancel' },
+        {
+          text: 'Oui, annuler',
+          style: 'destructive',
+          onPress: async () => {
+            setCancelling(true);
+            try {
+              await api.cancelOrder(restaurantIdNum, orderId);
+              await AsyncStorage.removeItem('currentOrder');
+              await load();
+            } catch (e: any) {
+              Alert.alert('Erreur', e.message ?? 'Impossible d\'annuler la commande.');
+            } finally {
+              setCancelling(false);
+            }
+          },
+        },
+      ],
+    );
+  };
 
   return (
     <FlatList
@@ -155,9 +186,19 @@ export default function CommandeScreen() {
             <Text style={styles.totalValue}>{formatPrixStr(order.totalAmount)}</Text>
           </View>
 
-          <Pressable style={styles.btnSecondary} onPress={() => router.push('/scanner')}>
-            <Text style={styles.btnSecondaryText}>Scanner un QR code</Text>
-          </Pressable>
+          {canCancel && (
+            <Pressable
+              style={({ pressed }) => [styles.btnCancel, (pressed || cancelling) && { opacity: 0.7 }]}
+              onPress={handleCancel}
+              disabled={cancelling}
+            >
+              {cancelling ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={styles.btnCancelText}>Annuler la commande</Text>
+              )}
+            </Pressable>
+          )}
 
           <Pressable style={styles.btn} onPress={() => router.replace('/')}>
             <Text style={styles.btnText}>Retour à l'accueil</Text>
@@ -234,16 +275,14 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   btnText: { color: '#fff', fontWeight: '700' },
-  btnSecondary: {
-    backgroundColor: colors.card,
+  errorTitle: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
+  errorMsg: { fontSize: 14, color: colors.textMuted },
+  btnCancel: {
+    backgroundColor: colors.danger,
     paddingVertical: spacing.md,
     borderRadius: radius.md,
     alignItems: 'center',
     marginTop: spacing.lg,
-    borderWidth: 1,
-    borderColor: colors.border,
   },
-  btnSecondaryText: { color: colors.primaryDark, fontWeight: '700' },
-  errorTitle: { fontSize: 18, fontWeight: '700', color: colors.text, marginBottom: spacing.sm },
-  errorMsg: { fontSize: 14, color: colors.textMuted },
+  btnCancelText: { color: '#fff', fontWeight: '700' },
 });

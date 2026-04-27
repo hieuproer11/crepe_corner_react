@@ -1,9 +1,20 @@
-import { Link, useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { colors, radius, spacing } from '../src/theme';
 
+type CurrentOrder = { orderId: number; restaurantId: number } | null;
+
 export default function HomeScreen() {
   const router = useRouter();
+  const [currentOrder, setCurrentOrder] = useState<CurrentOrder>(null);
+
+  useEffect(() => {
+    AsyncStorage.getItem('currentOrder').then((val) => {
+      if (val) setCurrentOrder(JSON.parse(val));
+    });
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -22,16 +33,23 @@ export default function HomeScreen() {
           <Text style={styles.primaryBtnText}>Commander</Text>
         </Pressable>
 
+        {currentOrder && (
+          <Pressable
+            style={({ pressed }) => [styles.orderBtn, pressed && styles.pressed]}
+            onPress={() =>
+              router.push(`/commande/${currentOrder.orderId}?restaurantId=${currentOrder.restaurantId}`)
+            }
+          >
+            <Text style={styles.orderBtnText}>📦 Ma commande #{currentOrder.orderId}</Text>
+          </Pressable>
+        )}
+
         <Pressable
           style={({ pressed }) => [styles.secondaryBtn, pressed && styles.pressed]}
-          onPress={() => router.push('/scanner')}
+          onPress={() => router.push('/panier')}
         >
-          <Text style={styles.secondaryBtnText}>Scanner un QR code</Text>
+          <Text style={styles.secondaryBtnText}>Mon panier</Text>
         </Pressable>
-
-        <Link href="/panier" style={styles.link}>
-          Voir mon panier
-        </Link>
       </View>
     </View>
   );
@@ -55,6 +73,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   primaryBtnText: { color: '#fff', fontSize: 18, fontWeight: '700' },
+  orderBtn: {
+    backgroundColor: colors.primaryDark,
+    paddingVertical: spacing.lg,
+    borderRadius: radius.md,
+    alignItems: 'center',
+  },
+  orderBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   secondaryBtn: {
     backgroundColor: colors.card,
     paddingVertical: spacing.lg,
