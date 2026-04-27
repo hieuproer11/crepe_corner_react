@@ -9,17 +9,25 @@ import {
   Text,
   View,
 } from 'react-native';
-import { api, formatPrix, STATUT_LABELS, type Commande } from '../../src/api';
+import {
+  api,
+  formatPrixStr,
+  STATUT_LABELS,
+  STATUT_PROGRESS,
+  type Order,
+} from '../../src/api';
 import { colors, radius, spacing } from '../../src/theme';
 
-const STATUT_PROGRESS: string[] = ['pending', 'confirmed', 'preparing', 'ready', 'delivered'];
+const RESTAURANT_ID_DEFAULT = 1;
 
 export default function CommandeScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, restaurantId } = useLocalSearchParams<{ id: string; restaurantId?: string }>();
   const router = useRouter();
-  const commandeId = Number(id);
 
-  const [commande, setCommande] = useState<Commande | null>(null);
+  const orderId = Number(id);
+  const restaurantIdNum = restaurantId ? Number(restaurantId) : RESTAURANT_ID_DEFAULT;
+
+  const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,21 +35,21 @@ export default function CommandeScreen() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const c = await api.getCommande(commandeId);
-      setCommande(c);
+      const res = await api.getOrder(restaurantIdNum, orderId);
+      setOrder(res.order);
     } catch (e: any) {
       setError(e.message ?? 'Erreur inconnue');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [commandeId]);
+  }, [orderId, restaurantIdNum]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  // Auto-refresh toutes les 10 secondes pour suivre le statut.
+  // Auto-refresh every 10 seconds to track status changes.
   useEffect(() => {
     const t = setInterval(() => {
       load();
@@ -57,7 +65,7 @@ export default function CommandeScreen() {
     );
   }
 
-  if (error || !commande) {
+  if (error || !order) {
     return (
       <View style={styles.center}>
         <Text style={styles.errorTitle}>Commande introuvable</Text>
@@ -69,12 +77,12 @@ export default function CommandeScreen() {
     );
   }
 
-  const currentStep = STATUT_PROGRESS.indexOf(commande.statut);
+  const currentStep = STATUT_PROGRESS.indexOf(order.status);
 
   return (
     <FlatList
-      data={commande.lignes}
-      keyExtractor={(l) => String(l.id)}
+      data={order.items ?? []}
+        keyExtractor={(l) => String(l.id)}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -89,14 +97,15 @@ export default function CommandeScreen() {
       ListHeaderComponent={
         <View>
           <View style={styles.headerCard}>
-            <Text style={styles.commandeId}>Commande #{commande.id}</Text>
+            <Text style={styles.commandeId}>Commande #{order.id}</Text>
             <View style={styles.statutBadge}>
               <Text style={styles.statutBadgeText}>
-                {STATUT_LABELS[commande.statut] ?? commande.statut}
+                {STATUT_LABELS[order.status] ?? order.status}
               </Text>
             </View>
+            <Text style={styles.customerName}>{order.customerName}</Text>
             <Text style={styles.date}>
-              Passée le {new Date(commande.dateCommande).toLocaleString('fr-FR')}
+              Passée le {new Date(order.createdAt).toLocaleString('fr-FR')}
             </Text>
           </View>
 
@@ -129,22 +138,24 @@ export default function CommandeScreen() {
       }
       renderItem={({ item }) => (
         <View style={styles.ligne}>
-          <Text style={styles.ligneQte}>{item.quantite}×</Text>
-          <Text style={styles.ligneNom}>{item.produitNom}</Text>
-          <Text style={styles.lignePrix}>{formatPrix(item.lineTotalCents)}</Text>
+          <Text style={styles.ligneQte}>{item.quantity}×</Text>
+          <Text style={styles.ligneNom}>{item.menuItemName}</Text>
+          <Text style={styles.lignePrix}>{formatPrixStr(item.lineTotal)}</Text>
         </View>
       )}
+      ListEmptyComponent={
+        <Text style={{ color: colors.textMuted, textAlign: 'center', marginVertical: spacing.md }}>
+          Le détail des articles sera disponible prochainement.
+        </Text>
+      }
       ListFooterComponent={
         <View>
           <View style={styles.totalRow}>
             <Text style={styles.totalLabel}>Total</Text>
-            <Text style={styles.totalValue}>{formatPrix(commande.totalCents)}</Text>
+            <Text style={styles.totalValue}>{formatPrixStr(order.totalAmount)}</Text>
           </View>
 
-          <Pressable
-            style={styles.btnSecondary}
-            onPress={() => router.push('/scanner')}
-          >
+          <Pressable style={styles.btnSecondary} onPress={() => router.push('/scanner')}>
             <Text style={styles.btnSecondaryText}>Scanner un QR code</Text>
           </Pressable>
 
@@ -176,14 +187,15 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   statutBadgeText: { color: colors.primaryDark, fontWeight: '700' },
-  date: { color: colors.textMuted, marginTop: spacing.sm, fontSize: 13 },
+  customerName: { color: colors.text, marginTop: spacing.sm, fontWeight: '600' },
+  date: { color: colors.textMuted, marginTop: spacing.xs, fontSize: 13 },
   progressRow: {
     flexDirection: 'row',
     marginTop: spacing.lg,
     marginBottom: spacing.lg,
   },
   progressDot: { width: 14, height: 14, borderRadius: 7, marginBottom: spacing.xs },
-  progressLabel: { fontSize: 11, textAlign: 'center' },
+  progressLabel: { fontSize: 10, textAlign: 'center' },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',

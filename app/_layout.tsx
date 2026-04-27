@@ -22,6 +22,7 @@ export default function RootLayout() {
           <Stack.Screen name="panier" options={{ title: 'Mon panier' }} />
           <Stack.Screen name="commande/[id]" options={{ title: 'Ma commande' }} />
           <Stack.Screen name="scanner" options={{ title: 'Scanner un QR code' }} />
+          <Stack.Screen name="trajet" options={{ title: 'En route…', headerBackVisible: false }} />
         </Stack>
       </CartProvider>
     </SafeAreaProvider>

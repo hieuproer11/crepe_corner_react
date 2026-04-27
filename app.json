@@ -13,11 +13,16 @@
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "Cette application utilise la caméra pour scanner les QR codes des commandes."
+        "NSCameraUsageDescription": "Cette application utilise la caméra pour scanner les QR codes des commandes.",
+        "NSLocationWhenInUseUsageDescription": "Votre position est utilisée pour déclencher automatiquement votre commande à l'approche du restaurant."
       }
     },
     "android": {
-      "permissions": ["android.permission.CAMERA"],
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#FFF7ED"
       }
@@ -31,6 +36,12 @@
         "expo-camera",
         {
           "cameraPermission": "Autoriser Crepe Corner à accéder à votre caméra pour scanner les QR codes."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Votre position est utilisée pour déclencher automatiquement votre commande à l'approche du restaurant."
         }
       ]
     ],

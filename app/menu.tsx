@@ -9,24 +9,19 @@ import {
   Text,
   View,
 } from 'react-native';
-import { api, formatPrix, type Produit } from '../src/api';
+import { api, formatPrixStr, CATEGORY_LABELS, type MenuItem, type Restaurant } from '../src/api';
 import { useCart } from '../src/cart';
 import { colors, radius, spacing } from '../src/theme';
 
 const RESTAURANT_ID = 1;
 
-const TYPE_LABELS: Record<string, string> = {
-  plat: 'Crêpes',
-  boisson: 'Boissons',
-  dessert: 'Desserts',
-};
-
-const TYPE_ORDER = ['plat', 'dessert', 'boisson'];
+const CATEGORY_ORDER = ['savory', 'sweet'];
 
 export default function MenuScreen() {
   const router = useRouter();
-  const { add, items, totalCents, totalArticles } = useCart();
-  const [produits, setProduits] = useState<Produit[]>([]);
+  const { add, items, totalCents, totalItems } = useCart();
+  const [menu, setMenu] = useState<MenuItem[]>([]);
+  const [restaurant, setRestaurant] = useState<Restaurant | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +30,8 @@ export default function MenuScreen() {
     setError(null);
     try {
       const res = await api.getMenu(RESTAURANT_ID);
-      setProduits(res.items);
+      setRestaurant(res.restaurant);
+      setMenu(res.menu);
     } catch (e: any) {
       setError(e.message ?? 'Erreur inconnue');
     } finally {
@@ -49,26 +45,26 @@ export default function MenuScreen() {
   }, []);
 
   const sections = useMemo(() => {
-    const groups: Record<string, Produit[]> = {};
-    for (const p of produits) {
-      (groups[p.type] ??= []).push(p);
+    const groups: Record<string, MenuItem[]> = {};
+    for (const item of menu) {
+      (groups[item.category] ??= []).push(item);
     }
-    const flat: Array<{ type: 'header'; title: string } | { type: 'item'; produit: Produit }> = [];
-    for (const t of TYPE_ORDER) {
-      if (groups[t]?.length) {
-        flat.push({ type: 'header', title: TYPE_LABELS[t] ?? t });
-        for (const p of groups[t]) flat.push({ type: 'item', produit: p });
-      }
-    }
-    // Catégories non répertoriées
-    for (const t of Object.keys(groups)) {
-      if (!TYPE_ORDER.includes(t)) {
-        flat.push({ type: 'header', title: TYPE_LABELS[t] ?? t });
-        for (const p of groups[t]) flat.push({ type: 'item', produit: p });
-      }
+    const flat: Array<
+      { type: 'header'; title: string } | { type: 'item'; menuItem: MenuItem }
+    > = [];
+
+    // Show known categories first, then any others
+    const orderedKeys = [
+      ...CATEGORY_ORDER.filter((k) => groups[k]?.length),
+      ...Object.keys(groups).filter((k) => !CATEGORY_ORDER.includes(k)),
+    ];
+
+    for (const cat of orderedKeys) {
+      flat.push({ type: 'header', title: CATEGORY_LABELS[cat] ?? cat });
+      for (const item of groups[cat]) flat.push({ type: 'item', menuItem: item });
     }
     return flat;
-  }, [produits]);
+  }, [menu]);
 
   if (loading) {
     return (
@@ -97,7 +93,9 @@ export default function MenuScreen() {
     <View style={{ flex: 1 }}>
       <FlatList
         data={sections}
-        keyExtractor={(it, i) => (it.type === 'header' ? `h-${it.title}` : `p-${it.produit.id}`)}
+        keyExtractor={(it) =>
+          it.type === 'header' ? `h-${it.title}` : `p-${it.menuItem.id}`
+        }
         contentContainerStyle={{ padding: spacing.lg, paddingBottom: 120 }}
         refreshControl={
           <RefreshControl
@@ -109,39 +107,51 @@ export default function MenuScreen() {
             tintColor={colors.primary}
           />
         }
+        ListHeaderComponent={
+          restaurant ? (
+            <Text style={styles.restaurantName}>{restaurant.name}</Text>
+          ) : null
+        }
         renderItem={({ item }) => {
           if (item.type === 'header') {
             return <Text style={styles.sectionHeader}>{item.title}</Text>;
           }
-          const p = item.produit;
-          const inCart = items.find((i) => i.produit.id === p.id)?.quantite ?? 0;
+          const m = item.menuItem;
+          const inCart = items.find((i) => i.menuItem.id === m.id)?.quantity ?? 0;
           return (
             <View style={styles.card}>
               <View style={{ flex: 1, paddingRight: spacing.md }}>
-                <Text style={styles.itemName}>{p.nom}</Text>
-                {p.description ? <Text style={styles.itemDesc}>{p.description}</Text> : null}
-                <Text style={styles.itemPrice}>{formatPrix(p.prixCents)}</Text>
+                <Text style={styles.itemName}>{m.name}</Text>
+                {m.description ? (
+                  <Text style={styles.itemDesc}>{m.description}</Text>
+                ) : null}
+                <Text style={styles.itemPrice}>{formatPrixStr(m.price)}</Text>
               </View>
               <Pressable
                 style={({ pressed }) => [styles.addBtn, pressed && { opacity: 0.7 }]}
-                onPress={() => add(p)}
+                onPress={() => add(m, RESTAURANT_ID)}
               >
-                <Text style={styles.addBtnText}>{inCart > 0 ? `+ (${inCart})` : '+ Ajouter'}</Text>
+                <Text style={styles.addBtnText}>
+                  {inCart > 0 ? `+ (${inCart})` : '+ Ajouter'}
+                </Text>
               </Pressable>
             </View>
           );
         }}
         ListEmptyComponent={
-          <Text style={{ textAlign: 'center', color: colors.textMuted, marginTop: spacing.xl }}>
+          <Text
+            style={{ textAlign: 'center', color: colors.textMuted, marginTop: spacing.xl }}
+          >
             Aucun produit disponible.
           </Text>
         }
       />
 
-      {totalArticles > 0 && (
+      {totalItems > 0 && (
         <Pressable style={styles.cartBar} onPress={() => router.push('/panier')}>
           <Text style={styles.cartBarText}>
-            {totalArticles} article{totalArticles > 1 ? 's' : ''} • {formatPrix(totalCents)}
+            {totalItems} article{totalItems > 1 ? 's' : ''} •{' '}
+            {(totalCents / 100).toFixed(2).replace('.', ',')} €
           </Text>
           <Text style={styles.cartBarCta}>Voir le panier ›</Text>
         </Pressable>
@@ -152,6 +162,12 @@ export default function MenuScreen() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: spacing.lg },
+  restaurantName: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: colors.text,
+    marginBottom: spacing.md,
+  },
   sectionHeader: {
     fontSize: 20,
     fontWeight: '700',

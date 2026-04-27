@@ -1,10 +1,6 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
-// Modifie cette URL selon ton environnement.
-// - Émulateur Android : http://10.0.2.2:8000/api
-// - Simulateur iOS    : http://127.0.0.1:8000/api
-// - Téléphone réel    : http://<IP_DE_TON_PC>:8000/api  (sur le même Wi-Fi)
 function getExpoHost(): string | undefined {
   const hostUri =
     Constants.expoConfig?.hostUri ??
@@ -16,7 +12,6 @@ function getExpoHost(): string | undefined {
 const DEFAULT_API_URL = (() => {
   const expoHost = getExpoHost();
   if (expoHost) {
-    // In Expo Go dev mode, reuse the same host as Metro and target backend port 8000.
     return `http://${expoHost}:8000/api`;
   }
   return Platform.OS === 'android' ? 'http://10.0.2.2:8000/api' : 'http://127.0.0.1:8000/api';
@@ -68,71 +63,143 @@ function safeJson(text: string): unknown {
   }
 }
 
-// ---- Types renvoyés par l'API ----
+// ---- Types matching the backend ----
 
-export type Produit = {
+export type MenuItem = {
   id: number;
-  type: 'plat' | 'boisson' | 'dessert' | string;
-  nom: string;
+  name: string;
   description: string | null;
-  prixCents: number;
-  prix: string;
-  disponible: boolean;
-  alcoolisee?: boolean;
+  category: 'savory' | 'sweet' | string;
+  price: string;        // e.g. "8.50"
 };
 
-export type LigneCommande = {
+export type Restaurant = {
   id: number;
-  produitId: number;
-  produitNom: string;
-  typeProduit: string;
-  quantite: number;
-  prixUnitaireCents: number;
-  lineTotalCents: number;
+  name: string;
+  latitude: number;
+  longitude: number;
 };
 
-export type Commande = {
+export type OrderItem = {
+  id: number;
+  menuItemId: number;
+  menuItemName: string;
+  quantity: number;
+  unitPrice: string;
+  lineTotal: string;
+};
+
+export type Order = {
   id: number;
   restaurantId: number;
-  statut: 'pending' | 'confirmed' | 'preparing' | 'ready' | 'delivered' | string;
-  totalCents: number;
-  total: string;
-  dateCommande: string;
-  updatedAt: string;
-  lignes: LigneCommande[];
+  customerName: string;
+  customerEmail: string;
+  status: 'received' | 'dispatched' | 'preparing' | 'ready' | 'served' | string;
+  totalAmount: string;   // e.g. "17.00"
+  createdAt: string;
+  // items are not included in the current backend response (phase 2)
+  items?: OrderItem[];
 };
 
-// ---- Endpoints ----
-
-export const api = {
-  health: () => request<{ status: string; timestamp: string }>('/health'),
-
-  getMenu: (restaurantId: number) =>
-    request<{ items: Produit[] }>(`/restaurants/${restaurantId}/menu`),
-
-  createCommande: (restaurantId: number, items: Array<{ produitId: number; quantite: number }>) =>
-    request<Commande>('/commandes', {
-      method: 'POST',
-      body: { restaurantId, items },
-    }),
-
-  getCommande: (id: number) => request<Commande>(`/commandes/${id}`),
-
-  updateStatut: (id: number, statut: string) =>
-    request<Commande>(`/commandes/${id}/statut`, {
-      method: 'PATCH',
-      body: { statut },
-    }),
+export type ApplicationCommand = {
+  id: number;
+  vehicleId: string;
+  restaurantId: number;
+  thresholdKm: number;
+  status: 'pending' | 'dispatched';
+  createdAt: string;
+  dispatchedAt: string | null;
 };
 
-export const STATUT_LABELS: Record<string, string> = {
-  pending: 'En attente',
-  confirmed: 'Confirmée',
-  preparing: 'En préparation',
-  ready: 'Prête',
-  delivered: 'Livrée',
-};
+// ---- Helpers ----
+
+/** Convert a price string like "8.50" to cents (850). */
+export function priceToCents(price: string): number {
+  return Math.round(parseFloat(price) * 100);
+}
 
 export function formatPrix(cents: number): string {
   return `${(cents / 100).toFixed(2).replace('.', ',')} €`;
 }
+
+export function formatPrixStr(price: string): string {
+  return formatPrix(priceToCents(price));
+}
+
+/** Map backend category values to French display labels. */
+export const CATEGORY_LABELS: Record<string, string> = {
+  savory: 'Crêpes salées',
+  sweet: 'Crêpes sucrées',
+};
+
+export const STATUT_LABELS: Record<string, string> = {
+  received: 'Reçue',
+  dispatched: 'Transmise',
+  preparing: 'En préparation',
+  ready: 'Prête',
+  served: 'Servie',
+};
+
+export const STATUT_PROGRESS: string[] = [
+  'received',
+  'dispatched',
+  'preparing',
+  'ready',
+  'served',
+];
+
+// ---- API calls ----
+
+export const api = {
+  /** GET /api/restaurants/{id}/menu */
+  getMenu: (restaurantId: number) =>
+    request<{ restaurant: Restaurant; menu: MenuItem[] }>(
+      `/restaurants/${restaurantId}/menu`,
+    ),
+
+  /** POST /api/restaurants/{id}/orders */
+  createOrder: (
+    restaurantId: number,
+    customer: { name: string; email: string },
+    items: Array<{ menuItemId: number; quantity: number }>,
+  ) =>
+    request<{ order: Order }>(`/restaurants/${restaurantId}/orders`, {
+      method: 'POST',
+      body: { customer, items },
+    }),
+
+  /** GET /api/restaurants/{restaurantId}/orders/{orderId} */
+  getOrder: (restaurantId: number, orderId: number) =>
+    request<{ order: Order }>(`/restaurants/${restaurantId}/orders/${orderId}`),
+
+  /**
+   * POST /api/application/commands
+   * Register a geo-triggered command: the backend will auto-place the order
+   * once the vehicle is within thresholdKm of the restaurant.
+   */
+  registerCommand: (payload: {
+    vehicleId: string;
+    restaurantId: number;
+    thresholdKm: number;
+    orderPayload: {
+      customer: { name: string; email: string };
+      items: Array<{ menuItemId: number; quantity: number }>;
+    };
+  }) =>
+    request<{ command: ApplicationCommand }>('/application/commands', {
+      method: 'POST',
+      body: payload,
+    }),
+
+  /**
+   * POST /api/simulation/vehicle-position
+   * Send the current GPS position of the vehicle.
+   * The backend checks all pending commands for this vehicle and triggers
+   * any whose restaurant is within the registered threshold.
+   */
+  updateVehiclePosition: (vehicleId: string, latitude: number, longitude: number) =>
+    request<{ triggered: number[] }>('/simulation/vehicle-position', {
+      method: 'POST',
+      body: { vehicleId, latitude, longitude },
+    }),
+};

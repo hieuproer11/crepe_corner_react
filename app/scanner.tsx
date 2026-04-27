@@ -3,6 +3,8 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { api } from '../src/api';
+
+const RESTAURANT_ID = 1;
 import { colors, radius, spacing } from '../src/theme';
 
 export default function ScannerScreen() {
@@ -59,8 +61,8 @@ export default function ScannerScreen() {
     }
 
     try {
-      const commande = await api.getCommande(commandeId);
-      router.replace(`/commande/${commande.id}`);
+      const res = await api.getOrder(RESTAURANT_ID, commandeId);
+      router.replace(`/commande/${res.order.id}?restaurantId=${RESTAURANT_ID}`);
     } catch (e: any) {
       Alert.alert('Commande introuvable', e.message ?? 'Erreur', [
         { text: 'Réessayer', onPress: () => setScanned(false) },

@@ -1,20 +1,21 @@
 import React, { createContext, useContext, useMemo, useState } from 'react';
-import type { Produit } from './api';
+import type { MenuItem } from './api';
+import { priceToCents } from './api';
 
 export type CartItem = {
-  produit: Produit;
-  quantite: number;
+  menuItem: MenuItem;
+  quantity: number;
 };
 
 type CartContextValue = {
   items: CartItem[];
   restaurantId: number | null;
-  add: (produit: Produit) => void;
-  remove: (produitId: number) => void;
-  setQuantite: (produitId: number, quantite: number) => void;
+  add: (menuItem: MenuItem, restaurantId: number) => void;
+  remove: (menuItemId: number) => void;
+  setQuantity: (menuItemId: number, quantity: number) => void;
   clear: () => void;
   totalCents: number;
-  totalArticles: number;
+  totalItems: number;
 };
 
 const CartContext = createContext<CartContextValue | null>(null);
@@ -23,31 +24,29 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [restaurantId, setRestaurantId] = useState<number | null>(null);
 
-  const add = (produit: Produit) => {
-    // Si on change de restaurant, on vide le panier.
+  const add = (menuItem: MenuItem, rid: number) => {
+    // If switching restaurant, clear cart first.
     setItems((prev) => {
-      if (restaurantId !== null && restaurantId !== 1 /* placeholder */) {
-        // pas applicable ici, on suit juste un seul restaurant pour l'instant
-      }
-      const existing = prev.find((i) => i.produit.id === produit.id);
+      const base = restaurantId !== null && restaurantId !== rid ? [] : prev;
+      const existing = base.find((i) => i.menuItem.id === menuItem.id);
       if (existing) {
-        return prev.map((i) =>
-          i.produit.id === produit.id ? { ...i, quantite: i.quantite + 1 } : i,
+        return base.map((i) =>
+          i.menuItem.id === menuItem.id ? { ...i, quantity: i.quantity + 1 } : i,
         );
       }
-      return [...prev, { produit, quantite: 1 }];
+      return [...base, { menuItem, quantity: 1 }];
     });
-    setRestaurantId(1);
+    setRestaurantId(rid);
   };
 
-  const remove = (produitId: number) => {
-    setItems((prev) => prev.filter((i) => i.produit.id !== produitId));
+  const remove = (menuItemId: number) => {
+    setItems((prev) => prev.filter((i) => i.menuItem.id !== menuItemId));
   };
 
-  const setQuantite = (produitId: number, quantite: number) => {
-    if (quantite <= 0) return remove(produitId);
+  const setQuantity = (menuItemId: number, quantity: number) => {
+    if (quantity <= 0) return remove(menuItemId);
     setItems((prev) =>
-      prev.map((i) => (i.produit.id === produitId ? { ...i, quantite } : i)),
+      prev.map((i) => (i.menuItem.id === menuItemId ? { ...i, quantity } : i)),
     );
   };
 
@@ -57,11 +56,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   };
 
   const totalCents = useMemo(
-    () => items.reduce((sum, i) => sum + i.produit.prixCents * i.quantite, 0),
+    () => items.reduce((sum, i) => sum + priceToCents(i.menuItem.price) * i.quantity, 0),
     [items],
   );
-  const totalArticles = useMemo(
-    () => items.reduce((sum, i) => sum + i.quantite, 0),
+
+  const totalItems = useMemo(
+    () => items.reduce((sum, i) => sum + i.quantity, 0),
     [items],
   );
 
@@ -70,10 +70,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     restaurantId,
     add,
     remove,
-    setQuantite,
+    setQuantity,
     clear,
     totalCents,
-    totalArticles,
+    totalItems,
   };
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
